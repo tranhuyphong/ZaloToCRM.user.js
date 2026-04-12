@@ -1,9 +1,11 @@
 // ==UserScript==
-// @name          ZALO TO CRM - BẢN 46.0 (TỐI ƯU ĐIỂM 10-11-12)
+// @name          ZALO TO CRM - HỆ THỐNG ĐỒNG BỘ PHÒNG BAN
 // @version      46.0
-// @description  Bơm chính xác điểm vào các ô Lớp 10, Lớp 11 và Học lực L12. Chặn Hạnh kiểm, cô lập Mô tả.
+// @description  Hệ thống tự động cập nhật từ máy chủ Admin.
 // @author       Thạch (Gemini)
 // @match        https://crm.tbd.edu.vn/*
+// @updateURL    [THAY_LINK_RAW_VAO_DAY]
+// @downloadURL  [THAY_LINK_RAW_VAO_DAY]
 // ==/UserScript==
 
 (function() {
@@ -26,89 +28,50 @@
         try {
             let text = await navigator.clipboard.readText();
             if (!text) { showToast("⚠️ Chưa copy tin nhắn!", "error"); return; }
-
-            let data = {
-                truong: "", ngaysinh: "", email: "", cccd: "", diachi: "",
-                sdt: "", phuhuynh: "", sdt_ph: "",
-                diem10: "", diem11: "", diem12: "", diemdgnl: "", mota: ""
-            };
-
+            let data = { truong: "", ngaysinh: "", email: "", cccd: "", diachi: "", sdt: "", phuhuynh: "", sdt_ph: "", diem10: "", diem11: "", diem12: "", diemdgnl: "", mota: "" };
             let cleanText = text.replace(/🌐/g, '').replace(/Zalo Web:?/gi, '').replace(/Đã nhận:?/gi, '');
             let lines = cleanText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
             let usedLines = new Set();
-
-            // 1. Nhặt Email & CCCD
             let emailMatch = cleanText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
             if (emailMatch) { data.email = emailMatch[0]; lines.forEach((l, i) => { if(l.includes(data.email)) usedLines.add(i); }); }
             let cccdMatch = cleanText.match(/\b(0\d{11})\b/);
             if (cccdMatch) { data.cccd = cccdMatch[1]; lines.forEach((l, i) => { if(l.includes(data.cccd)) usedLines.add(i); }); }
-
-            // 2. Nhận diện các dòng thông tin
             lines.forEach((line, index) => {
-                let low = line.toLowerCase();
-                let isUsed = false;
-
+                let low = line.toLowerCase(); let isUsed = false;
                 let d10 = line.match(/(?:lớp 10|lop 10|l10|điểm 10)[\s:,\-]*(\d{1,2}(?:[.,]\d{1,2})?)/i);
                 let d11 = line.match(/(?:lớp 11|lop 11|l11|điểm 11)[\s:,\-]*(\d{1,2}(?:[.,]\d{1,2})?)/i);
                 let d12 = line.match(/(?:lớp 12|lop 12|l12|điểm 12)[\s:,\-]*(\d{1,2}(?:[.,]\d{1,2})?)/i);
                 let dgnl = line.match(/(?:đgnl|dgnl|đánh giá năng lực)[\s:,\-]*(\d{3,4})/i);
-
                 if (d10) { data.diem10 = d10[1].replace(',', '.'); isUsed = true; }
                 else if (d11) { data.diem11 = d11[1].replace(',', '.'); isUsed = true; }
                 else if (d12) { data.diem12 = d12[1].replace(',', '.'); isUsed = true; }
                 else if (dgnl) { data.diemdgnl = dgnl[1]; isUsed = true; }
                 else if (line.match(/\b\d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?\b/)) { data.ngaysinh = line.match(/\b\d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?\b/)[0]; isUsed = true; }
-
                 let phoneMatch = line.match(/\b(0[35789]\d{8})\b/);
                 if (phoneMatch && !isUsed) {
                     let phone = phoneMatch[1];
-                    let nameOnly = line.replace(phone, '').replace(/[-+*:(),]/g, '').trim();
+                    let nameOnly = line.replace(phone, '').replace(/[-+*:(),]/g, '').trim(); 
                     if (nameOnly && nameOnly.split(/\s+/).length >= 2) { data.sdt_ph = phone; data.phuhuynh = nameOnly; isUsed = true; }
                     else { data.sdt = phone; isUsed = true; }
                 }
-
                 if (!isUsed && !data.truong && (low.includes("trường") || low.includes("thpt") || /lý tự trọng|chuyên|nguyễn|trần|lê/.test(low))) { data.truong = line.replace(/^(?:Trường THPT|Trường)[\s:,\-]*\s*/i, '').trim(); isUsed = true; }
                 if (!isUsed && !data.diachi && (low.includes("xã") || low.includes("phường") || low.includes("huyện") || low.includes("tỉnh") || low.includes("tp") || line.includes(","))) { data.diachi = line.trim(); isUsed = true; }
-
                 if (isUsed) usedLines.add(index);
             });
-
-            // Gom nội dung thừa
             data.mota = lines.filter((_, i) => !usedLines.has(i)).join(" | ");
-
-            // 3. ĐỔ VÀO FORM
             let inputs = document.querySelectorAll('input, textarea, select');
             let count = 0;
-
             inputs.forEach(input => {
-                // Lấy thông tin nhận diện ô (clues)
                 let clues = [input.name || '', input.id || '', input.placeholder || '', input.className || ''].join(' ').toLowerCase();
                 if (input.labels) Array.from(input.labels).forEach(l => clues += ' ' + l.innerText.toLowerCase());
                 let td = input.closest('td');
                 if (td && td.previousElementSibling) clues += ' ' + td.previousElementSibling.innerText.toLowerCase();
-
                 let filled = false;
-
-                // --- BỘ LỌC ĐIỀN DỮ LIỆU ---
-                if (clues.includes("hạnh kiểm")) return; // Chặn hạnh kiểm
-
-                // Ô Mô tả duy nhất
-                if (data.mota && clues.includes("mô tả") && !clues.includes("tình trạng")) {
-                    input.value = data.mota; filled = true; data.mota = "";
-                }
-                // Ô Học lực L12 (hoặc điểm 12)
-                else if (data.diem12 && (/học lực|lớp 12|l12/i.test(clues)) && !/10|11/i.test(clues)) {
-                    input.value = data.diem12; filled = true; data.diem12 = "";
-                }
-                // Ô Lớp 10 (Regex tìm chính xác chữ lớp 10 hoặc l10 đứng độc lập)
-                else if (data.diem10 && /(lớp|l|điểm|diem)\s*10/i.test(clues) && !/11|12/i.test(clues)) {
-                    input.value = data.diem10; filled = true; data.diem10 = "";
-                }
-                // Ô Lớp 11
-                else if (data.diem11 && /(lớp|l|điểm|diem)\s*11/i.test(clues) && !/10|12/i.test(clues)) {
-                    input.value = data.diem11; filled = true; data.diem11 = "";
-                }
-                // Các trường khác
+                if (clues.includes("hạnh kiểm")) return;
+                if (data.mota && clues.includes("mô tả") && !clues.includes("tình trạng")) { input.value = data.mota; filled = true; data.mota = ""; }
+                else if (data.diem12 && (/học lực|lớp 12|l12/i.test(clues)) && !/10|11/i.test(clues)) { input.value = data.diem12; filled = true; data.diem12 = ""; }
+                else if (data.diem10 && /(lớp|l|điểm|diem)\s*10/i.test(clues) && !/11|12/i.test(clues)) { input.value = data.diem10; filled = true; data.diem10 = ""; }
+                else if (data.diem11 && /(lớp|l|điểm|diem)\s*11/i.test(clues) && !/10|12/i.test(clues)) { input.value = data.diem11; filled = true; data.diem11 = ""; }
                 else if (data.phuhuynh && /cha|mẹ|ba|phụ huynh/i.test(clues) && /họ tên|tên/i.test(clues)) { input.value = data.phuhuynh; filled = true; data.phuhuynh = ""; }
                 else if (data.truong && /trường|thpt/.test(clues) && !/mã|tỉnh/.test(clues)) { input.value = data.truong; filled = true; data.truong = ""; }
                 else if (data.ngaysinh && clues.includes("ngày sinh")) { input.value = data.ngaysinh; filled = true; data.ngaysinh = ""; }
@@ -118,7 +81,6 @@
                 else if (data.sdt && /di động|sđt|điện thoại/i.test(clues) && !/cha|mẹ|phụ huynh/i.test(clues)) { input.value = data.sdt; filled = true; data.sdt = ""; }
                 else if (data.sdt_ph && /cha|mẹ|phụ huynh/i.test(clues) && /sđt|điện thoại/i.test(clues)) { input.value = data.sdt_ph; filled = true; data.sdt_ph = ""; }
                 else if (data.diemdgnl && /đgnl|dgnl/i.test(clues)) { input.value = data.diemdgnl; filled = true; data.diemdgnl = ""; }
-
                 if (filled) {
                     input.dispatchEvent(new Event('input', { bubbles: true }));
                     input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -126,7 +88,6 @@
                     count++;
                 }
             });
-
             showToast(`🎯 Bản 46.0: Đã bơm ${count} ô thành công!`, "success");
         } catch (e) { showToast("⚠️ Lỗi: " + e.message, "error"); }
     };
