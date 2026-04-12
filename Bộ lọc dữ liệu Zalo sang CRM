@@ -4,8 +4,8 @@
 // @description  Hệ thống tự động cập nhật từ máy chủ Admin.
 // @author       Thạch (Gemini)
 // @match        https://crm.tbd.edu.vn/*
-// @updateURL    [THAY_LINK_RAW_VAO_DAY]
-// @downloadURL  [THAY_LINK_RAW_VAO_DAY]
+// @updateURL    [https://raw.githubusercontent.com/tranhuyphong/ZaloToCRM.user.js/refs/heads/main/B%E1%BB%99%20l%E1%BB%8Dc%20d%E1%BB%AF%20li%E1%BB%87u%20Zalo%20sang%20CRM]
+// @downloadURL  [https://raw.githubusercontent.com/tranhuyphong/ZaloToCRM.user.js/refs/heads/main/B%E1%BB%99%20l%E1%BB%8Dc%20d%E1%BB%AF%20li%E1%BB%87u%20Zalo%20sang%20CRM]
 // ==/UserScript==
 
 (function() {
