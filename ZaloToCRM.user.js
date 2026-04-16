@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         ZALO TO CRM - BẢN 58.0 (FIX ĐỊNH DẠNG NGÀY SINH)
-// @version      58.0
-// @description  Ép định dạng ngày sinh chuẩn DD-MM-YYYY, sửa lỗi in hoa tỉnh thành.
+// @name         ZALO TO CRM - BẢN 59.0 (AUTO TÌNH TRẠNG L.03 & NOTE)
+// @version      59.0
+// @description  Ép định dạng ngày sinh, tự động chọn Tình trạng L.03, đẩy text thừa vào Note.
 // @author       Thạch (Gemini)
 // @match        https://crm.tbd.edu.vn/*
 // @updateURL    https://raw.githubusercontent.com/tranhuyphong/ZaloToCRM.user.js/main/ZaloToCRM.user.js
@@ -171,7 +171,7 @@
     };
 
     let btnHut = document.createElement('button');
-    btnHut.innerHTML = '🎯 ỈN THÔNG TIN NÈ CHỊ ĐẸP';
+    btnHut.innerHTML = '🎯 HÚT & BƠM (V59.0 - AUTO TÌNH TRẠNG & NOTE)';
     btnHut.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 9999; padding: 15px 25px; background: #E91E63; color: white; border-radius: 30px; cursor: pointer; font-weight: bold; border: 2px solid white; box-shadow: 0 4px 15px rgba(0,0,0,0.4); transition: 0.3s;';
     document.body.appendChild(btnHut);
 
@@ -255,14 +255,21 @@
                 } else { data.diachi = rawDiaChi; }
             }
 
+            // TÁCH NOTE THỪA
             let leftover = originalText;
             blocksToRemove.forEach(block => { leftover = leftover.replace(block, ' '); });
             leftover = leftover.replace(/(trường|thpt|địa chỉ|ngày sinh|email|cccd|cmnd|sđt|sdt|điểm|-|:|\bhk1\b)/gi, ' ')
                                .replace(/[.,;/_]+/g, ' ').replace(/\s+/g, ' ').trim();
             if (leftover.length > 3) data.mota = leftover;
 
-            // --- XỬ LÝ PHỄU VỚI AI SỬA CHÍNH TẢ ---
+            // --- XỬ LÝ PHỄU & DROPDOWN ---
             let statusArr = [];
+
+            // Ép Tình trạng về L.03
+            let selTinhTrang = findSelectByLabel("tình trạng", false);
+            if (selTinhTrang && forceSelectDropdown(selTinhTrang, "L.03", false)) {
+                 statusArr.push(`✅ Trạng thái (L.03)`);
+            }
 
             if (data.tinh_truong) {
                 let aiResult = detectAndFixProvince(data.tinh_truong);
@@ -313,7 +320,9 @@
                 else if (data.diem12 && clues.includes("lớp12") && !clues.includes("hạnh kiểm")) val = data.diem12;
                 else if (data.truong && clues.includes("trường thpt") && !clues.includes("tỉnh") && !clues.includes("mã")) val = data.truong;
                 else if (data.diachi && clues.includes("địa chỉ") && !clues.includes("mô tả")) val = data.diachi;
-                else if (data.mota && clues.includes("mô tả") && !clues.includes("tình trạng")) val = data.mota;
+                
+                // --- ĐẨY TEXT THỪA VÀO Ô NOTE ĐÂY NHÉ ---
+                else if (data.mota && (clues === "note" || clues.includes("ghi chú"))) val = data.mota;
 
                 if (val) {
                     input.value = val;
