@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         ZALO TO CRM - BẢN 57.0 (AUTO UPDATE CHUẨN)
-// @version      57.0
-// @description  Sửa lỗi nhận diện chữ in hoa có dấu (Đ) trên CRM, tự động nắn chính tả tỉnh thành bằng Levenshtein.
+// @name         ZALO TO CRM - BẢN 58.0 (FIX ĐỊNH DẠNG NGÀY SINH)
+// @version      58.0
+// @description  Ép định dạng ngày sinh chuẩn DD-MM-YYYY, sửa lỗi in hoa tỉnh thành.
 // @author       Thạch (Gemini)
 // @match        https://crm.tbd.edu.vn/*
 // @updateURL    https://raw.githubusercontent.com/tranhuyphong/ZaloToCRM.user.js/main/ZaloToCRM.user.js
@@ -17,7 +17,7 @@
     // --- CHUẨN HÓA XÓA DẤU & KHOẢNG TRẮNG ---
     function normalizeTextStrict(str) {
         if (!str) return "";
-        str = str.toLowerCase(); // FIX LỖI: Bắt buộc hạ thành chữ thường TRƯỚC KHI xóa dấu
+        str = str.toLowerCase();
         str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
         str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
         str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
@@ -171,7 +171,7 @@
     };
 
     let btnHut = document.createElement('button');
-    btnHut.innerHTML = '🎯 HÚT & BƠM (V57.0 - AUTO UPDATE)';
+    btnHut.innerHTML = '🎯 HÚT & BƠM (V58.0 - TỰ CHUẨN HÓA NGÀY)';
     btnHut.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 9999; padding: 15px 25px; background: #E91E63; color: white; border-radius: 30px; cursor: pointer; font-weight: bold; border: 2px solid white; box-shadow: 0 4px 15px rgba(0,0,0,0.4); transition: 0.3s;';
     document.body.appendChild(btnHut);
 
@@ -198,7 +198,18 @@
 
             data.cccd = extract(/(?:cccd|căn cước|cmnd)?\s*[:\-]?\s*(\d{12})\b/i, true) || extract(/\b\d{12}\b/);
             data.email = extract(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+            
+            // LẤY NGÀY SINH & CHUẨN HÓA THÀNH DD-MM-YYYY
             data.ngaysinh = extract(/(?:ngày sinh|ns)?\s*[:\-]?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})\b/i, true) || extract(/\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b/);
+            if (data.ngaysinh) {
+                let parts = data.ngaysinh.replace(/[\/\.]/g, '-').split('-');
+                if (parts.length === 3) {
+                    let d = parts[0].padStart(2, '0');
+                    let m = parts[1].padStart(2, '0');
+                    let y = parts[2].length === 2 ? "20" + parts[2] : parts[2]; // Thêm 20 nếu năm chỉ có 2 số (08 -> 2008)
+                    data.ngaysinh = `${d}-${m}-${y}`;
+                }
+            }
 
             let sdtMatch = wText.match(/(?:sdt|sđt|đt|-|:)?\s*(0[35789]\d{8})\b/i);
             if (sdtMatch) {
@@ -253,27 +264,25 @@
             // --- XỬ LÝ PHỄU VỚI AI SỬA CHÍNH TẢ ---
             let statusArr = [];
 
-            // Phễu Tỉnh Trường & Mã Tỉnh Trường
             if (data.tinh_truong) {
                 let aiResult = detectAndFixProvince(data.tinh_truong);
                 if (aiResult) {
                     let selTruong = findSelectByLabel("tỉnh trường thpt", true);
-                    if (selTruong && forceSelectDropdown(selTruong, aiResult.name)) statusArr.push(`✅ T.Trường (${aiResult.name})`);
+                    if (selTruong && forceSelectDropdown(selTruong, aiResult.name)) statusArr.push(`✅ T.Trường`);
 
                     let selMaTruong = findSelectByLabel("mã tỉnh trường thpt", true);
-                    if (selMaTruong && forceSelectDropdown(selMaTruong, aiResult.code, true)) statusArr.push(`✅ Mã T.Trường (${aiResult.code})`);
+                    if (selMaTruong && forceSelectDropdown(selMaTruong, aiResult.code, true)) statusArr.push(`✅ Mã T.Trường`);
                 }
             }
 
-            // Phễu Tỉnh/TP & Mã Tỉnh/TP (Địa chỉ)
             if (data.tinh_diachi) {
                 let aiResult = detectAndFixProvince(data.tinh_diachi);
                 if (aiResult) {
                     let selDiaChi = findSelectByLabel("tỉnh/ tp", true);
-                    if (selDiaChi && forceSelectDropdown(selDiaChi, aiResult.name)) statusArr.push(`✅ Tỉnh/TP (${aiResult.name})`);
+                    if (selDiaChi && forceSelectDropdown(selDiaChi, aiResult.name)) statusArr.push(`✅ Tỉnh/TP`);
 
                     let selMaDiaChi = findSelectByLabel("mã tỉnh/ tp", true) || findSelectByLabel("mã tỉnh/tp", true);
-                    if (selMaDiaChi && forceSelectDropdown(selMaDiaChi, aiResult.code, true)) statusArr.push(`✅ Mã Tỉnh/TP (${aiResult.code})`);
+                    if (selMaDiaChi && forceSelectDropdown(selMaDiaChi, aiResult.code, true)) statusArr.push(`✅ Mã Tỉnh/TP`);
                 }
             }
 
