@@ -1,15 +1,22 @@
 // ==UserScript==
-// @name         ZALO TO CRM - BẢN 56.0 (FIX LỖI CHỮ IN HOA TỈNH THÀNH)
-// @version      56.0
+// @name         ZALO TO CRM - BẢN 57.0 (AUTO UPDATE)
+// @version      57.0
 // @description  Sửa lỗi nhận diện chữ in hoa có dấu (Đ) trên CRM, tự động nắn chính tả tỉnh thành bằng Levenshtein.
 // @author       Thạch (Gemini)
 // @match        https://crm.tbd.edu.vn/*
+// @updateURL    https://raw.githubusercontent.com/tranhuyphong/ZaloToCRM.user.js/main/ZaloToCRM.user.js
+// @downloadURL  https://raw.githubusercontent.com/tranhuyphong/ZaloToCRM.user.js/main/ZaloToCRM.user.js
 // @grant        GM_setClipboard
 // @grant        GM_readClipboard
 // @grant        unsafeWindow
 // ==/UserScript==
 
 (function() {
+    'use strict';
+
+    // --- CHUẨN HÓA XÓA DẤU & KHOẢNG TRẮNG ---
+    function normalizeTextStrict(str) {
+        if (!str) return "";
     'use strict';
 
     // --- CHUẨN HÓA XÓA DẤU & KHOẢNG TRẮNG ---
