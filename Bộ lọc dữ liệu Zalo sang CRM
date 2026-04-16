@@ -1,94 +1,322 @@
 // ==UserScript==
-// @name          ZALO TO CRM - HỆ THỐNG ĐỒNG BỘ PHÒNG BAN
-// @version      46.0
-// @description  Hệ thống tự động cập nhật từ máy chủ Admin.
+// @name         ZALO TO CRM - BẢN 56.0 (FIX LỖI CHỮ IN HOA TỈNH THÀNH)
+// @version      56.0
+// @description  Sửa lỗi nhận diện chữ in hoa có dấu (Đ) trên CRM, tự động nắn chính tả tỉnh thành bằng Levenshtein.
 // @author       Thạch (Gemini)
 // @match        https://crm.tbd.edu.vn/*
-// @updateURL    [https://raw.githubusercontent.com/tranhuyphong/ZaloToCRM.user.js/refs/heads/main/B%E1%BB%99%20l%E1%BB%8Dc%20d%E1%BB%AF%20li%E1%BB%87u%20Zalo%20sang%20CRM]
-// @downloadURL  [https://raw.githubusercontent.com/tranhuyphong/ZaloToCRM.user.js/refs/heads/main/B%E1%BB%99%20l%E1%BB%8Dc%20d%E1%BB%AF%20li%E1%BB%87u%20Zalo%20sang%20CRM]
+// @grant        GM_setClipboard
+// @grant        GM_readClipboard
+// @grant        unsafeWindow
 // ==/UserScript==
 
 (function() {
     'use strict';
 
-    const showToast = (msg, type = 'info', duration = 5000) => {
+    // --- CHUẨN HÓA XÓA DẤU & KHOẢNG TRẮNG ---
+    function normalizeTextStrict(str) {
+        if (!str) return "";
+        str = str.toLowerCase(); // FIX LỖI: Bắt buộc hạ thành chữ thường TRƯỚC KHI xóa dấu
+        str = str.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, "a");
+        str = str.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, "e");
+        str = str.replace(/ì|í|ị|ỉ|ĩ/g, "i");
+        str = str.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, "o");
+        str = str.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, "u");
+        str = str.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, "y");
+        str = str.replace(/đ/g, "d");
+        return str.replace(/\s+/g, '').trim();
+    }
+
+    // --- THUẬT TOÁN ĐO ĐỘ LỆCH CHÍNH TẢ (LEVENSHTEIN DISTANCE) ---
+    function getEditDistance(a, b) {
+        if(a.length === 0) return b.length;
+        if(b.length === 0) return a.length;
+        let matrix = [];
+        for(let i = 0; i <= b.length; i++) { matrix[i] = [i]; }
+        for(let j = 0; j <= a.length; j++) { matrix[0][j] = j; }
+        for(let i = 1; i <= b.length; i++) {
+            for(let j = 1; j <= a.length; j++) {
+                if(b.charAt(i-1) == a.charAt(j-1)) {
+                    matrix[i][j] = matrix[i-1][j-1];
+                } else {
+                    matrix[i][j] = Math.min(matrix[i-1][j-1] + 1, Math.min(matrix[i][j-1] + 1, matrix[i-1][j] + 1));
+                }
+            }
+        }
+        return matrix[b.length][a.length];
+    }
+
+    // --- TỪ ĐIỂN 63 TỈNH THÀNH ---
+    const PROVINCES = [
+        { c: "01", n: ["hanoi","hn"] }, { c: "02", n: ["hochiminh","hcm","saigon"] }, { c: "03", n: ["haiphong","hp"] },
+        { c: "04", n: ["danang","dn"] }, { c: "05", n: ["hagiang"] }, { c: "06", n: ["caobang"] },
+        { c: "07", n: ["laichau"] }, { c: "08", n: ["laocai"] }, { c: "09", n: ["tuyenquang"] },
+        { c: "10", n: ["langson"] }, { c: "11", n: ["backan"] }, { c: "12", n: ["thainguyen"] },
+        { c: "13", n: ["yenbai"] }, { c: "14", n: ["sonla"] }, { c: "15", n: ["phutho"] },
+        { c: "16", n: ["vinhphuc"] }, { c: "17", n: ["quangninh"] }, { c: "18", n: ["bacgiang"] },
+        { c: "19", n: ["bacninh"] }, { c: "21", n: ["haiduong"] }, { c: "22", n: ["hungyen"] },
+        { c: "23", n: ["hoabinh"] }, { c: "24", n: ["hanam"] }, { c: "25", n: ["namdinh"] },
+        { c: "26", n: ["thaibinh"] }, { c: "27", n: ["ninhbinh"] }, { c: "28", n: ["thanhhoa"] },
+        { c: "29", n: ["nghean"] }, { c: "30", n: ["hatinh"] }, { c: "31", n: ["quangbinh"] },
+        { c: "32", n: ["quangtri"] }, { c: "33", n: ["thuathienhue","hue"] }, { c: "34", n: ["quangnam"] },
+        { c: "35", n: ["quangngai"] }, { c: "36", n: ["kontum"] }, { c: "37", n: ["binhdinh"] },
+        { c: "38", n: ["gialai"] }, { c: "39", n: ["phuyen"] }, { c: "40", n: ["daklak","daclac"] },
+        { c: "41", n: ["khanhhoa"] }, { c: "42", n: ["lamdong","dalat"] }, { c: "43", n: ["ninhthuan"] },
+        { c: "44", n: ["binhthuan"] }, { c: "45", n: ["tayninh"] }, { c: "46", n: ["binhphuoc"] },
+        { c: "47", n: ["binhduong"] }, { c: "48", n: ["dongnai","bienhoa"] }, { c: "49", n: ["bariavungtau","vungtau"] },
+        { c: "50", n: ["dongthap"] }, { c: "51", n: ["angiang"] }, { c: "52", n: ["travinh"] },
+        { c: "53", n: ["vinhlong"] }, { c: "54", n: ["cantho"] }, { c: "55", n: ["haugiang"] },
+        { c: "56", n: ["bentre"] }, { c: "57", n: ["tiengiang"] }, { c: "58", n: ["kiengiang"] },
+        { c: "59", n: ["soctrang"] }, { c: "60", n: ["baclieu"] }, { c: "61", n: ["camau"] },
+        { c: "62", n: ["dienbien"] }, { c: "63", n: ["daknong","dacnong"] }
+    ];
+
+    // --- AI SỬA CHÍNH TẢ TỈNH ---
+    function detectAndFixProvince(inputStr) {
+        let t = normalizeTextStrict(inputStr);
+        if (!t) return null;
+
+        let bestMatch = null;
+        let minDistance = 999;
+
+        for (let p of PROVINCES) {
+            for (let name of p.n) {
+                if (t === name || t.includes(name)) return { code: p.c, name: p.n[0] };
+
+                let dist = getEditDistance(t, name);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    bestMatch = { code: p.c, name: p.n[0] };
+                }
+            }
+        }
+
+        if (minDistance <= 2 && t.length > 3) {
+            return bestMatch;
+        }
+        return null;
+    }
+
+    // --- HÀM TÌM THẺ SELECT QUA NHÃN ---
+    function findSelectByLabel(labelText, isExact = false) {
+        let selects = document.querySelectorAll('select');
+        for (let sel of selects) {
+            let lbl = "";
+            let td = sel.closest('td');
+            if (td && td.previousElementSibling) {
+                lbl = td.previousElementSibling.innerText.toLowerCase().trim();
+            } else {
+                let parent = sel.parentElement;
+                if (parent && parent.previousElementSibling) {
+                    lbl = parent.previousElementSibling.innerText.toLowerCase().trim();
+                }
+            }
+            if (lbl) {
+                if (isExact && lbl === labelText) return sel;
+                if (!isExact && lbl.includes(labelText)) return sel;
+            }
+        }
+        return null;
+    }
+
+    // --- ÉP CHỌN DROPDOWN CRM ---
+    function forceSelectDropdown(selectEl, searchText, isCode = false) {
+        if (!selectEl || !searchText) return false;
+
+        let normalizedSearch = normalizeTextStrict(searchText);
+        let matchFound = false;
+        let matchedValue = "";
+
+        Array.from(selectEl.options).forEach(option => {
+            if (matchFound) return;
+            if (isCode) {
+                let regex = new RegExp(`\\b${searchText}\\b`);
+                if (option.value === searchText || regex.test(option.text)) {
+                    matchedValue = option.value;
+                    matchFound = true;
+                }
+            } else {
+                if (normalizeTextStrict(option.text).includes(normalizedSearch)) {
+                    matchedValue = option.value;
+                    matchFound = true;
+                }
+            }
+        });
+
+        if (matchFound && matchedValue) {
+            selectEl.value = matchedValue;
+            selectEl.dispatchEvent(new Event("change", { bubbles: true }));
+
+            let jq = typeof unsafeWindow !== 'undefined' && unsafeWindow.jQuery ? unsafeWindow.jQuery : (window.jQuery || window.$);
+            if (jq) {
+                jq(selectEl).val(matchedValue).trigger('change');
+                jq(selectEl).trigger('change.select2');
+                jq(selectEl).trigger('liszt:updated');
+            }
+            let visibleDropdown = selectEl.nextElementSibling;
+            if(visibleDropdown) visibleDropdown.style.border = '2px solid #FF9800';
+            return true;
+        }
+        return false;
+    }
+
+    // --- GIAO DIỆN ---
+    const showToast = (msg, type = 'info') => {
         let toast = document.createElement('div');
         toast.innerHTML = msg;
-        toast.style.cssText = `position: fixed; top: 30px; right: 30px; z-index: 10000; padding: 15px 25px; border-radius: 8px; color: white; font-weight: bold; font-size: 15px; background: ${type === 'success' ? '#4CAF50' : '#F44336'}; box-shadow: 0 4px 15px rgba(0,0,0,0.4);`;
+        toast.style.cssText = `position: fixed; top: 30px; right: 30px; z-index: 10000; padding: 15px 25px; border-radius: 8px; color: white; font-weight: bold; font-size: 14px; background: ${type === 'success' ? '#4CAF50' : '#F44336'}; box-shadow: 0 4px 15px rgba(0,0,0,0.4); line-height: 1.5;`;
         document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), duration);
+        setTimeout(() => toast.remove(), 6000);
     };
 
     let btnHut = document.createElement('button');
-    btnHut.innerHTML = '📥 HÚT & BƠM (BẢN 46.0)';
-    btnHut.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 9999; padding: 15px 25px; background: #00796B; color: white; border-radius: 30px; cursor: pointer; font-weight: bold; border: 2px solid white; box-shadow: 0 4px 15px rgba(0,0,0,0.4); transition: 0.3s;';
+    btnHut.innerHTML = '🎯 HÚT & BƠM (V56.0 - FIX LỖI TỈNH)';
+    btnHut.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 9999; padding: 15px 25px; background: #E91E63; color: white; border-radius: 30px; cursor: pointer; font-weight: bold; border: 2px solid white; box-shadow: 0 4px 15px rgba(0,0,0,0.4); transition: 0.3s;';
     document.body.appendChild(btnHut);
 
+    // --- XỬ LÝ CHÍNH ---
     btnHut.onclick = async function() {
         try {
-            let text = await navigator.clipboard.readText();
-            if (!text) { showToast("⚠️ Chưa copy tin nhắn!", "error"); return; }
-            let data = { truong: "", ngaysinh: "", email: "", cccd: "", diachi: "", sdt: "", phuhuynh: "", sdt_ph: "", diem10: "", diem11: "", diem12: "", diemdgnl: "", mota: "" };
-            let cleanText = text.replace(/🌐/g, '').replace(/Zalo Web:?/gi, '').replace(/Đã nhận:?/gi, '');
-            let lines = cleanText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-            let usedLines = new Set();
-            let emailMatch = cleanText.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-            if (emailMatch) { data.email = emailMatch[0]; lines.forEach((l, i) => { if(l.includes(data.email)) usedLines.add(i); }); }
-            let cccdMatch = cleanText.match(/\b(0\d{11})\b/);
-            if (cccdMatch) { data.cccd = cccdMatch[1]; lines.forEach((l, i) => { if(l.includes(data.cccd)) usedLines.add(i); }); }
-            lines.forEach((line, index) => {
-                let low = line.toLowerCase(); let isUsed = false;
-                let d10 = line.match(/(?:lớp 10|lop 10|l10|điểm 10)[\s:,\-]*(\d{1,2}(?:[.,]\d{1,2})?)/i);
-                let d11 = line.match(/(?:lớp 11|lop 11|l11|điểm 11)[\s:,\-]*(\d{1,2}(?:[.,]\d{1,2})?)/i);
-                let d12 = line.match(/(?:lớp 12|lop 12|l12|điểm 12)[\s:,\-]*(\d{1,2}(?:[.,]\d{1,2})?)/i);
-                let dgnl = line.match(/(?:đgnl|dgnl|đánh giá năng lực)[\s:,\-]*(\d{3,4})/i);
-                if (d10) { data.diem10 = d10[1].replace(',', '.'); isUsed = true; }
-                else if (d11) { data.diem11 = d11[1].replace(',', '.'); isUsed = true; }
-                else if (d12) { data.diem12 = d12[1].replace(',', '.'); isUsed = true; }
-                else if (dgnl) { data.diemdgnl = dgnl[1]; isUsed = true; }
-                else if (line.match(/\b\d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?\b/)) { data.ngaysinh = line.match(/\b\d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?\b/)[0]; isUsed = true; }
-                let phoneMatch = line.match(/\b(0[35789]\d{8})\b/);
-                if (phoneMatch && !isUsed) {
-                    let phone = phoneMatch[1];
-                    let nameOnly = line.replace(phone, '').replace(/[-+*:(),]/g, '').trim(); 
-                    if (nameOnly && nameOnly.split(/\s+/).length >= 2) { data.sdt_ph = phone; data.phuhuynh = nameOnly; isUsed = true; }
-                    else { data.sdt = phone; isUsed = true; }
+            let originalText = await navigator.clipboard.readText();
+            if (!originalText) { showToast("⚠️ Chưa copy tin nhắn!", "error"); return; }
+
+            let data = { truong: "", tinh_truong: "", ngaysinh: "", email: "", cccd: "", diachi: "", tinh_diachi: "", sdt_ph: "", ten_ph: "", diem10: "", diem11: "", diem12: "", mota: "" };
+            let wText = originalText.replace(/([a-zA-ZÀ-ỹ])(sdt|sđt|0[35789])/gi, '$1 $2').replace(/(sdt|sđt)(0[35789])/gi, '$1 $2').replace(/🌐|Zalo Web:|Đã nhận:/gi, ' ');
+            let blocksToRemove = [];
+
+            function extract(regex, isGroup = false) {
+                let match = wText.match(regex);
+                if (match) {
+                    blocksToRemove.push(match[0]);
+                    wText = wText.replace(match[0], ' '.repeat(match[0].length));
+                    let result = (isGroup ? match[1] : match[0]).trim();
+                    return result.replace(/,(\d)/g, '.$1');
                 }
-                if (!isUsed && !data.truong && (low.includes("trường") || low.includes("thpt") || /lý tự trọng|chuyên|nguyễn|trần|lê/.test(low))) { data.truong = line.replace(/^(?:Trường THPT|Trường)[\s:,\-]*\s*/i, '').trim(); isUsed = true; }
-                if (!isUsed && !data.diachi && (low.includes("xã") || low.includes("phường") || low.includes("huyện") || low.includes("tỉnh") || low.includes("tp") || line.includes(","))) { data.diachi = line.trim(); isUsed = true; }
-                if (isUsed) usedLines.add(index);
-            });
-            data.mota = lines.filter((_, i) => !usedLines.has(i)).join(" | ");
-            let inputs = document.querySelectorAll('input, textarea, select');
+                return "";
+            }
+
+            data.cccd = extract(/(?:cccd|căn cước|cmnd)?\s*[:\-]?\s*(\d{12})\b/i, true) || extract(/\b\d{12}\b/);
+            data.email = extract(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+            data.ngaysinh = extract(/(?:ngày sinh|ns)?\s*[:\-]?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})\b/i, true) || extract(/\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b/);
+
+            let sdtMatch = wText.match(/(?:sdt|sđt|đt|-|:)?\s*(0[35789]\d{8})\b/i);
+            if (sdtMatch) {
+                data.sdt_ph = sdtMatch[1];
+                blocksToRemove.push(sdtMatch[0]);
+                let beforeSdt = wText.substring(0, sdtMatch.index);
+                let nameMatch = beforeSdt.match(/((?:[\p{Lu}][\p{Ll}]+\s+){1,4}[\p{Lu}][\p{Ll}]+)\s*[^\w]*$/u);
+                if (nameMatch) {
+                    data.ten_ph = nameMatch[1].trim();
+                    blocksToRemove.push(nameMatch[0]);
+                    wText = wText.replace(nameMatch[0], ' ');
+                }
+                wText = wText.replace(sdtMatch[0], ' ');
+            }
+
+            data.diem10 = extract(/(?:10|lớp 10|l10)[^\d]*(\d{1,2}[.,]\d{1,2})/i, true);
+            data.diem11 = extract(/(?:11|lớp 11|l11)[^\d]*(\d{1,2}[.,]\d{1,2})/i, true);
+            data.diem12 = extract(/(?:12|lớp 12|hk1 12|hk1)[^\d]*(\d{1,2}[.,]\d{1,2})/i, true);
+
+            let stopWords = "\\s*-|\\s*ngày sinh|\\s*email|\\s*cccd|\\s*địa chỉ|\\s*sđt|\\s*sdt|\\s*điểm|$";
+
+            // TRƯỜNG & TỈNH TRƯỜNG
+            let truongRegex = new RegExp(`(?:trường|thpt)\\s+([^]+?)(?=${stopWords})`, 'i');
+            let rawTruong = extract(truongRegex, true);
+            if (rawTruong) {
+                rawTruong = rawTruong.replace(/[\.\-:\n]+$/, '').trim();
+                let matchTruong = rawTruong.match(/(.+?)(?:,\s*|\s+)(?:tỉnh|tp\.|tp|thành phố)\s+(.+)/i);
+                if (matchTruong) {
+                    data.truong = matchTruong[1].trim();
+                    data.tinh_truong = matchTruong[2].replace(/\.$/, "").trim();
+                } else { data.truong = rawTruong; }
+            }
+
+            // ĐỊA CHỈ & TỈNH ĐỊA CHỈ
+            let diachiRegex = new RegExp(`(?:địa chỉ|thường trú)\\s*[:\\-]?\\s*([^]+?)(?=${stopWords})`, 'i');
+            let rawDiaChi = extract(diachiRegex, true);
+            if(rawDiaChi) {
+                rawDiaChi = rawDiaChi.replace(/[\.\-:\n]+$/, '').trim();
+                let matchDiaChi = rawDiaChi.match(/(.+?)(?:,\s*|\s+)(?:tỉnh|tp\.|tp|thành phố)\s+(.+)/i);
+                if (matchDiaChi) {
+                    data.diachi = matchDiaChi[1].trim();
+                    data.tinh_diachi = matchDiaChi[2].replace(/\.$/, "").trim();
+                } else { data.diachi = rawDiaChi; }
+            }
+
+            let leftover = originalText;
+            blocksToRemove.forEach(block => { leftover = leftover.replace(block, ' '); });
+            leftover = leftover.replace(/(trường|thpt|địa chỉ|ngày sinh|email|cccd|cmnd|sđt|sdt|điểm|-|:|\bhk1\b)/gi, ' ')
+                               .replace(/[.,;/_]+/g, ' ').replace(/\s+/g, ' ').trim();
+            if (leftover.length > 3) data.mota = leftover;
+
+            // --- XỬ LÝ PHỄU VỚI AI SỬA CHÍNH TẢ ---
+            let statusArr = [];
+
+            // Phễu Tỉnh Trường & Mã Tỉnh Trường
+            if (data.tinh_truong) {
+                let aiResult = detectAndFixProvince(data.tinh_truong);
+                if (aiResult) {
+                    let selTruong = findSelectByLabel("tỉnh trường thpt", true);
+                    if (selTruong && forceSelectDropdown(selTruong, aiResult.name)) statusArr.push(`✅ T.Trường (${aiResult.name})`);
+
+                    let selMaTruong = findSelectByLabel("mã tỉnh trường thpt", true);
+                    if (selMaTruong && forceSelectDropdown(selMaTruong, aiResult.code, true)) statusArr.push(`✅ Mã T.Trường (${aiResult.code})`);
+                }
+            }
+
+            // Phễu Tỉnh/TP & Mã Tỉnh/TP (Địa chỉ)
+            if (data.tinh_diachi) {
+                let aiResult = detectAndFixProvince(data.tinh_diachi);
+                if (aiResult) {
+                    let selDiaChi = findSelectByLabel("tỉnh/ tp", true);
+                    if (selDiaChi && forceSelectDropdown(selDiaChi, aiResult.name)) statusArr.push(`✅ Tỉnh/TP (${aiResult.name})`);
+
+                    let selMaDiaChi = findSelectByLabel("mã tỉnh/ tp", true) || findSelectByLabel("mã tỉnh/tp", true);
+                    if (selMaDiaChi && forceSelectDropdown(selMaDiaChi, aiResult.code, true)) statusArr.push(`✅ Mã Tỉnh/TP (${aiResult.code})`);
+                }
+            }
+
+            // --- XỬ LÝ INPUT TEXT ---
             let count = 0;
-            inputs.forEach(input => {
-                let clues = [input.name || '', input.id || '', input.placeholder || '', input.className || ''].join(' ').toLowerCase();
-                if (input.labels) Array.from(input.labels).forEach(l => clues += ' ' + l.innerText.toLowerCase());
+            function getExactLabel(input) {
+                if (input.labels && input.labels.length > 0) return input.labels[0].innerText.toLowerCase();
                 let td = input.closest('td');
-                if (td && td.previousElementSibling) clues += ' ' + td.previousElementSibling.innerText.toLowerCase();
-                let filled = false;
-                if (clues.includes("hạnh kiểm")) return;
-                if (data.mota && clues.includes("mô tả") && !clues.includes("tình trạng")) { input.value = data.mota; filled = true; data.mota = ""; }
-                else if (data.diem12 && (/học lực|lớp 12|l12/i.test(clues)) && !/10|11/i.test(clues)) { input.value = data.diem12; filled = true; data.diem12 = ""; }
-                else if (data.diem10 && /(lớp|l|điểm|diem)\s*10/i.test(clues) && !/11|12/i.test(clues)) { input.value = data.diem10; filled = true; data.diem10 = ""; }
-                else if (data.diem11 && /(lớp|l|điểm|diem)\s*11/i.test(clues) && !/10|12/i.test(clues)) { input.value = data.diem11; filled = true; data.diem11 = ""; }
-                else if (data.phuhuynh && /cha|mẹ|ba|phụ huynh/i.test(clues) && /họ tên|tên/i.test(clues)) { input.value = data.phuhuynh; filled = true; data.phuhuynh = ""; }
-                else if (data.truong && /trường|thpt/.test(clues) && !/mã|tỉnh/.test(clues)) { input.value = data.truong; filled = true; data.truong = ""; }
-                else if (data.ngaysinh && clues.includes("ngày sinh")) { input.value = data.ngaysinh; filled = true; data.ngaysinh = ""; }
-                else if (data.email && clues.includes("email")) { input.value = data.email; filled = true; data.email = ""; }
-                else if (data.cccd && /cccd|căn cước/.test(clues)) { input.value = data.cccd; filled = true; data.cccd = ""; }
-                else if (data.diachi && /địa chỉ|thường trú/.test(clues)) { input.value = data.diachi; filled = true; data.diachi = ""; }
-                else if (data.sdt && /di động|sđt|điện thoại/i.test(clues) && !/cha|mẹ|phụ huynh/i.test(clues)) { input.value = data.sdt; filled = true; data.sdt = ""; }
-                else if (data.sdt_ph && /cha|mẹ|phụ huynh/i.test(clues) && /sđt|điện thoại/i.test(clues)) { input.value = data.sdt_ph; filled = true; data.sdt_ph = ""; }
-                else if (data.diemdgnl && /đgnl|dgnl/i.test(clues)) { input.value = data.diemdgnl; filled = true; data.diemdgnl = ""; }
-                if (filled) {
+                if (td && td.previousElementSibling) return td.previousElementSibling.innerText.toLowerCase();
+                let parent = input.parentElement;
+                if (parent && parent.previousElementSibling) return parent.previousElementSibling.innerText.toLowerCase();
+                return "";
+            }
+
+            document.querySelectorAll('input:not([type="hidden"]), textarea').forEach(input => {
+                if (input.readOnly) return;
+                let clues = getExactLabel(input).trim();
+                if (!clues || clues.length < 2) return;
+                let val = "";
+
+                if (data.email && clues.includes("email")) val = data.email;
+                else if (data.cccd && (clues.includes("cccd") || clues.includes("căn cước"))) val = data.cccd;
+                else if (data.ngaysinh && clues.includes("ngày sinh")) val = data.ngaysinh;
+                else if (data.sdt_ph && clues.includes("phụ huynh") && clues.includes("sđt")) val = data.sdt_ph;
+                else if (data.ten_ph && clues.includes("phụ huynh") && (clues.includes("họ tên") || clues.includes("tên"))) val = data.ten_ph;
+                else if (data.diem10 && clues.includes("lớp10") && !clues.includes("hạnh kiểm")) val = data.diem10;
+                else if (data.diem11 && clues.includes("lớp11") && !clues.includes("hạnh kiểm")) val = data.diem11;
+                else if (data.diem12 && clues.includes("lớp12") && !clues.includes("hạnh kiểm")) val = data.diem12;
+                else if (data.truong && clues.includes("trường thpt") && !clues.includes("tỉnh") && !clues.includes("mã")) val = data.truong;
+                else if (data.diachi && clues.includes("địa chỉ") && !clues.includes("mô tả")) val = data.diachi;
+                else if (data.mota && clues.includes("mô tả") && !clues.includes("tình trạng")) val = data.mota;
+
+                if (val) {
+                    input.value = val;
+                    input.style.backgroundColor = '#FFF9C4';
+                    input.style.border = '2px solid #FF9800';
                     input.dispatchEvent(new Event('input', { bubbles: true }));
                     input.dispatchEvent(new Event('change', { bubbles: true }));
-                    input.style.backgroundColor = '#FFECB3';
                     count++;
                 }
             });
-            showToast(`🎯 Bản 46.0: Đã bơm ${count} ô thành công!`, "success");
+
+            let statusMsg = statusArr.length > 0 ? `<br>${statusArr.join(" | ")}` : "";
+            showToast(count > 0 || statusArr.length > 0 ? `🎯 Bóc tách thành công ${count} ô text.${statusMsg}` : "⚠️ Không tìm thấy ô trên CRM.", (count > 0 || statusArr.length > 0) ? "success" : "error");
+
         } catch (e) { showToast("⚠️ Lỗi: " + e.message, "error"); }
     };
 })();
