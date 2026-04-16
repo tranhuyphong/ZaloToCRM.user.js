@@ -171,7 +171,7 @@
     };
 
     let btnHut = document.createElement('button');
-    btnHut.innerHTML = '🎯 HÚT & BƠM (V59.0 - AUTO TÌNH TRẠNG & NOTE)';
+    btnHut.innerHTML = '🎯 ỈN THÔNG TIN NÈ CHỊ ĐẸP';
     btnHut.style.cssText = 'position: fixed; bottom: 20px; right: 20px; z-index: 9999; padding: 15px 25px; background: #E91E63; color: white; border-radius: 30px; cursor: pointer; font-weight: bold; border: 2px solid white; box-shadow: 0 4px 15px rgba(0,0,0,0.4); transition: 0.3s;';
     document.body.appendChild(btnHut);
 
