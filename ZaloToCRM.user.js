@@ -246,3 +246,79 @@
 
             let leftover = originalText;
             blocksToRemove.forEach(block => { leftover = leftover.replace(block, ' '); });
+            leftover = leftover.replace(/(trường|thpt|địa chỉ|ngày sinh|email|cccd|cmnd|sđt|sdt|điểm|-|:|\bhk1\b)/gi, ' ')
+                               .replace(/[.,;/_]+/g, ' ').replace(/\s+/g, ' ').trim();
+            if (leftover.length > 3) data.mota = leftover;
+
+            // --- XỬ LÝ PHỄU VỚI AI SỬA CHÍNH TẢ ---
+            let statusArr = [];
+
+            // Phễu Tỉnh Trường & Mã Tỉnh Trường
+            if (data.tinh_truong) {
+                let aiResult = detectAndFixProvince(data.tinh_truong);
+                if (aiResult) {
+                    let selTruong = findSelectByLabel("tỉnh trường thpt", true);
+                    if (selTruong && forceSelectDropdown(selTruong, aiResult.name)) statusArr.push(`✅ T.Trường (${aiResult.name})`);
+
+                    let selMaTruong = findSelectByLabel("mã tỉnh trường thpt", true);
+                    if (selMaTruong && forceSelectDropdown(selMaTruong, aiResult.code, true)) statusArr.push(`✅ Mã T.Trường (${aiResult.code})`);
+                }
+            }
+
+            // Phễu Tỉnh/TP & Mã Tỉnh/TP (Địa chỉ)
+            if (data.tinh_diachi) {
+                let aiResult = detectAndFixProvince(data.tinh_diachi);
+                if (aiResult) {
+                    let selDiaChi = findSelectByLabel("tỉnh/ tp", true);
+                    if (selDiaChi && forceSelectDropdown(selDiaChi, aiResult.name)) statusArr.push(`✅ Tỉnh/TP (${aiResult.name})`);
+
+                    let selMaDiaChi = findSelectByLabel("mã tỉnh/ tp", true) || findSelectByLabel("mã tỉnh/tp", true);
+                    if (selMaDiaChi && forceSelectDropdown(selMaDiaChi, aiResult.code, true)) statusArr.push(`✅ Mã Tỉnh/TP (${aiResult.code})`);
+                }
+            }
+
+            // --- XỬ LÝ INPUT TEXT ---
+            let count = 0;
+            function getExactLabel(input) {
+                if (input.labels && input.labels.length > 0) return input.labels[0].innerText.toLowerCase();
+                let td = input.closest('td');
+                if (td && td.previousElementSibling) return td.previousElementSibling.innerText.toLowerCase();
+                let parent = input.parentElement;
+                if (parent && parent.previousElementSibling) return parent.previousElementSibling.innerText.toLowerCase();
+                return "";
+            }
+
+            document.querySelectorAll('input:not([type="hidden"]), textarea').forEach(input => {
+                if (input.readOnly) return;
+                let clues = getExactLabel(input).trim();
+                if (!clues || clues.length < 2) return;
+                let val = "";
+
+                if (data.email && clues.includes("email")) val = data.email;
+                else if (data.cccd && (clues.includes("cccd") || clues.includes("căn cước"))) val = data.cccd;
+                else if (data.ngaysinh && clues.includes("ngày sinh")) val = data.ngaysinh;
+                else if (data.sdt_ph && clues.includes("phụ huynh") && clues.includes("sđt")) val = data.sdt_ph;
+                else if (data.ten_ph && clues.includes("phụ huynh") && (clues.includes("họ tên") || clues.includes("tên"))) val = data.ten_ph;
+                else if (data.diem10 && clues.includes("lớp10") && !clues.includes("hạnh kiểm")) val = data.diem10;
+                else if (data.diem11 && clues.includes("lớp11") && !clues.includes("hạnh kiểm")) val = data.diem11;
+                else if (data.diem12 && clues.includes("lớp12") && !clues.includes("hạnh kiểm")) val = data.diem12;
+                else if (data.truong && clues.includes("trường thpt") && !clues.includes("tỉnh") && !clues.includes("mã")) val = data.truong;
+                else if (data.diachi && clues.includes("địa chỉ") && !clues.includes("mô tả")) val = data.diachi;
+                else if (data.mota && clues.includes("mô tả") && !clues.includes("tình trạng")) val = data.mota;
+
+                if (val) {
+                    input.value = val;
+                    input.style.backgroundColor = '#FFF9C4';
+                    input.style.border = '2px solid #FF9800';
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    count++;
+                }
+            });
+
+            let statusMsg = statusArr.length > 0 ? `<br>${statusArr.join(" | ")}` : "";
+            showToast(count > 0 || statusArr.length > 0 ? `🎯 Bóc tách thành công ${count} ô text.${statusMsg}` : "⚠️ Không tìm thấy ô trên CRM.", (count > 0 || statusArr.length > 0) ? "success" : "error");
+
+        } catch (e) { showToast("⚠️ Lỗi: " + e.message, "error"); }
+    };
+})();
