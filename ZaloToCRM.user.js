@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         ZALO TO CRM - BẢN 59.0 (AUTO TÌNH TRẠNG L.03 & NOTE)
-// @version      59.0
-// @description  Ép định dạng ngày sinh, tự động chọn Tình trạng L.03, đẩy text thừa vào Note.
+// @name         ZALO TO CRM - BẢN 59.0 (AUTO TÌNH TRẠNG L.1 & NOTE)
+// @version      60.0
+// @description  Ép định dạng ngày sinh, tự động chọn Tình trạng L.1, đẩy text thừa vào Note.
 // @author       Thạch (Gemini)
 // @match        https://crm.tbd.edu.vn/*
 // @updateURL    https://raw.githubusercontent.com/tranhuyphong/ZaloToCRM.user.js/main/ZaloToCRM.user.js
@@ -267,8 +267,8 @@
 
             // Ép Tình trạng về L.03
             let selTinhTrang = findSelectByLabel("tình trạng", false);
-            if (selTinhTrang && forceSelectDropdown(selTinhTrang, "L.03", false)) {
-                 statusArr.push(`✅ Trạng thái (L.03)`);
+            if (selTinhTrang && forceSelectDropdown(selTinhTrang, "L.1", false)) {
+                 statusArr.push(`✅ Trạng thái (L.1)`);
             }
 
             if (data.tinh_truong) {
