@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         ZALO TO CRM - BẢN 59.0 (AUTO TÌNH TRẠNG L.1 & NOTE)
+// @name         ZALO TO CRM - BẢN 60.0 (FIX AUTO TÌNH TRẠNG L1)
 // @version      60.0
-// @description  Ép định dạng ngày sinh, tự động chọn Tình trạng L.1, đẩy text thừa vào Note.
+// @description  Ép định dạng ngày sinh, tự động chọn Tình trạng L1 chuẩn xác, đẩy text thừa vào Note.
 // @author       Thạch (Gemini)
 // @match        https://crm.tbd.edu.vn/*
 // @updateURL    https://raw.githubusercontent.com/tranhuyphong/ZaloToCRM.user.js/main/ZaloToCRM.user.js
@@ -198,7 +198,7 @@
 
             data.cccd = extract(/(?:cccd|căn cước|cmnd)?\s*[:\-]?\s*(\d{12})\b/i, true) || extract(/\b\d{12}\b/);
             data.email = extract(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
-            
+
             // LẤY NGÀY SINH & CHUẨN HÓA THÀNH DD-MM-YYYY
             data.ngaysinh = extract(/(?:ngày sinh|ns)?\s*[:\-]?\s*(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})\b/i, true) || extract(/\b\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}\b/);
             if (data.ngaysinh) {
@@ -206,7 +206,7 @@
                 if (parts.length === 3) {
                     let d = parts[0].padStart(2, '0');
                     let m = parts[1].padStart(2, '0');
-                    let y = parts[2].length === 2 ? "20" + parts[2] : parts[2]; // Thêm 20 nếu năm chỉ có 2 số (08 -> 2008)
+                    let y = parts[2].length === 2 ? "20" + parts[2] : parts[2];
                     data.ngaysinh = `${d}-${m}-${y}`;
                 }
             }
@@ -265,12 +265,29 @@
             // --- XỬ LÝ PHỄU & DROPDOWN ---
             let statusArr = [];
 
-            // Ép Tình trạng về L.03
+            // Ép Tình trạng về L1 (Tìm chính xác tuyệt đối chữ "L1")
             let selTinhTrang = findSelectByLabel("tình trạng", false);
-            if (selTinhTrang && forceSelectDropdown(selTinhTrang, "L.1", false)) {
-                 statusArr.push(`✅ Trạng thái (L.1)`);
+            if (selTinhTrang) {
+                let matchFound = false;
+                Array.from(selTinhTrang.options).forEach(option => {
+                    if (option.text.trim() === "L1") {
+                        selTinhTrang.value = option.value;
+                        matchFound = true;
+                    }
+                });
+
+                if (matchFound) {
+                    selTinhTrang.dispatchEvent(new Event("change", { bubbles: true }));
+                    let jq = typeof unsafeWindow !== 'undefined' && unsafeWindow.jQuery ? unsafeWindow.jQuery : (window.jQuery || window.$);
+                    if (jq) {
+                        jq(selTinhTrang).val(selTinhTrang.value).trigger('change');
+                        jq(selTinhTrang).trigger('change.select2');
+                    }
+                    statusArr.push(`✅ Trạng thái (L1)`);
+                }
             }
 
+            // XỬ LÝ TỈNH TRƯỜNG KHÁC
             if (data.tinh_truong) {
                 let aiResult = detectAndFixProvince(data.tinh_truong);
                 if (aiResult) {
@@ -320,8 +337,6 @@
                 else if (data.diem12 && clues.includes("lớp12") && !clues.includes("hạnh kiểm")) val = data.diem12;
                 else if (data.truong && clues.includes("trường thpt") && !clues.includes("tỉnh") && !clues.includes("mã")) val = data.truong;
                 else if (data.diachi && clues.includes("địa chỉ") && !clues.includes("mô tả")) val = data.diachi;
-                
-                // --- ĐẨY TEXT THỪA VÀO Ô NOTE ĐÂY NHÉ ---
                 else if (data.mota && (clues === "note" || clues.includes("ghi chú"))) val = data.mota;
 
                 if (val) {
